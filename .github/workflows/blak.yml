@@ -1,0 +1,83 @@
+
+name: Windows Gaming Cloud - Diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gaming-pc:
+    name: Check Windows Gaming Hardware
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Inspect Windows and Hardware
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+
+          $report = @()
+          $report += "=== WINDOWS GAMING PC REPORT ==="
+          $report += "Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+          $report += ""
+
+          # Windows version
+          $os = Get-CimInstance Win32_OperatingSystem
+          $report += "=== OPERATING SYSTEM ==="
+          $report += "Name: $($os.Caption)"
+          $report += "Version: $($os.Version)"
+          $report += "Architecture: $($os.OSArchitecture)"
+          $report += ""
+
+          # CPU
+          $report += "=== PROCESSOR ==="
+          Get-CimInstance Win32_Processor | ForEach-Object {
+            $report += "CPU: $($_.Name)"
+            $report += "Logical processors: $($_.NumberOfLogicalProcessors)"
+          }
+          $report += ""
+
+          # RAM
+          $report += "=== MEMORY ==="
+          $cs = Get-CimInstance Win32_ComputerSystem
+          $ramGB = [math]::Round($cs.TotalPhysicalMemory / 1GB, 2)
+          $report += "Total RAM: $ramGB GB"
+          $report += ""
+
+          # Graphics hardware
+          $report += "=== GRAPHICS ==="
+          Get-CimInstance Win32_VideoController |
+            ForEach-Object {
+              $report += "GPU: $($_.Name)"
+              $report += "Driver: $($_.DriverVersion)"
+              $report += "Video memory reported: $($_.AdapterRAM)"
+              $report += ""
+            }
+
+          # Disk
+          $report += "=== STORAGE ==="
+          Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'" |
+            ForEach-Object {
+              $report += "Drive: $($_.DeviceID)"
+              $report += "Size: $([math]::Round($_.Size / 1GB, 2)) GB"
+              $report += "Free: $([math]::Round($_.FreeSpace / 1GB, 2)) GB"
+            }
+
+          $report += ""
+          $report += "=== LIMITATIONS ==="
+          $report += "Detected hardware is not necessarily dedicated hardware."
+          $report += "This workflow does not provision an RTX 3060."
+          $report += "This workflow does not guarantee 32 GB RAM."
+          $report += "This runner is temporary and is not a persistent gaming PC."
+
+          $report | Tee-Object -FilePath gaming-report.txt
+
+      - name: Save Hardware Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-gaming-hardware-report
+          path: gaming-report.txt
+          retention-days: 3
